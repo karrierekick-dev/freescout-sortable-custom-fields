@@ -133,7 +133,7 @@ class SortableCustomFieldsServiceProvider extends ServiceProvider
                 ob_start()
                 ?>
                 
-                     <td class="custom-field-td">
+                     <td class="custom-field-td <?= $this->createCSSClassForCustomField($custom_field) ?>">
                      <a href="<?= $conversation->url() ?>" title="<?= __('View conversation') ?>"><?= $custom_field->getAsText() ?></a>
                      </td>
                 <?php
@@ -151,15 +151,19 @@ class SortableCustomFieldsServiceProvider extends ServiceProvider
                 
                 foreach ($conversation->custom_fields as $custom_field){
                     echo " ";
-                    $slug_title= $this->createSlug($custom_field->name, "-");
-                    $slug_value= $this->createSlug($custom_field->getAsText(), "-");
-                    echo 'cf_'.$slug_title.'_'.$slug_value;
+                    echo $this->createCSSClassForCustomField($custom_field);
                     echo " ";
                 }
             }
           
         });
     
+    }
+
+    private function createCSSClassForCustomField($custom_field) {
+        $propName = $this->createSlug($custom_field->name, "-");
+        $propValue = $this->createSlug($custom_field->getAsText(), "-");
+        return 'cf_' . $propName . '_' . $propValue;
     }
 
   
