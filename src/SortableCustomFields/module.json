@@ -1,0 +1,23 @@
+{
+    "name": "Sortable Custom Fields",
+    "alias": "sortablecustomfields",
+    "description": "Sortable Custom Fields in conversation tab!",
+    "version": "1.0.0",
+    "detailsUrl": "https://freescout.net/module/sortable-custom-fields/",
+    "author": "Edudzi",
+    "authorUrl": "https://Edudzi.net",
+    "requiredAppVersion": "1.8.117",
+    "license": "AGPL-3.0",
+    "keywords": [],
+    "active": 1,
+    "order": 0,
+    "providers": [
+        "Modules\\SortableCustomFields\\Providers\\SortableCustomFieldsServiceProvider"
+    ],
+    "aliases": {
+        "CustomField": "Modules\\CustomFields\\Entities\\CustomField"
+    },
+    "files": [
+    ],
+    "requires": []
+}
