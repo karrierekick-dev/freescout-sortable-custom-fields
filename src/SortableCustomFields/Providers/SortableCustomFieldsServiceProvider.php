@@ -112,7 +112,7 @@ class SortableCustomFieldsServiceProvider extends ServiceProvider
                     ob_start()
                         ?>
                     <th class="custom-field-th">
-                        <span class="conv-col-sort custom-field-tr" data-sort-by="custom_<?=  $slug ?>" data-order="<?=  ($sorting['sort_by'] ==  'custom_'.$slug)?$sorting['order']:'asc' ?>">
+                        <span class="conv-col-sort custom-field-tr" data-sort-by="custom_<?=  $slug ?>" data-order="<?=  ($sorting['sort_by'] ==  'custom_'.$slug) ? $sorting['order']:'desc' ?>">
                             <?=  __($custom_field->name) ?>
                             <?= ($sorting['sort_by'] == 'custom_'.$slug && $sorting['order'] =='asc')? '↓' : '' ?>
                             <?= ($sorting['sort_by'] == 'custom_'.$slug && $sorting['order'] =='desc')? '↑' : ''?>
