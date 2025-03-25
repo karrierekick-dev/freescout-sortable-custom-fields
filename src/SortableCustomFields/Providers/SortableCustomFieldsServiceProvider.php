@@ -46,9 +46,12 @@ class SortableCustomFieldsServiceProvider extends ServiceProvider
             if (isset($_REQUEST['sorting'])&& strpos($_REQUEST['sorting']['sort_by'], 'custom_') === 0) {
                 $sortBy = str_replace('custom_','',$_REQUEST['sorting']['sort_by']);
                 $query_conversations = $query_conversations->leftJoin(\DB::Raw('(select conversation_custom_field.custom_field_id, conversation_custom_field.conversation_id,conversation_custom_field.value,name from conversation_custom_field left join custom_fields on conversation_custom_field.custom_field_id = custom_fields.id where name LIKE \''.$sortBy.'\') a'),'a.conversation_id','=','conversations.id');
-             
-                $query_conversations=  $query_conversations->selectRaw('*, (CASE WHEN a.name LIKE \''.$sortBy.'\' THEN a.value END) AS '. $sortBy);
-                  $query_conversations=  $query_conversations->orderBy($sortBy,$_REQUEST['sorting']['order']);
+
+                // FIX for #2 "Sorting of Custom Fields not working with Customer Folders"
+                $query_conversations=  $query_conversations->selectRaw('conversations.*, (CASE WHEN a.name LIKE \''.$sortBy.'\' THEN a.value END) AS '. $sortBy);
+                // old Implementation
+                // $query_conversations=  $query_conversations->selectRaw('*, (CASE WHEN a.name LIKE \''.$sortBy.'\' THEN a.value END) AS '. $sortBy);
+                $query_conversations=  $query_conversations->orderBy($sortBy,$_REQUEST['sorting']['order']);
             }
             return $query_conversations;
 
