@@ -26,13 +26,18 @@ class SortableCustomFieldsServiceProvider extends ServiceProvider
         return $slug;
     }
 
+    protected function isSearchPage()
+    {
+        return \Route::is('conversations.search') || request()->is('search') || request()->is('search/*');
+    }
+
     /**
      * Custom field columns are only consistent in a single-mailbox list.
      * Search / multi-mailbox views mix fields and break the table layout (#1).
      */
     protected function getMailboxIdForList()
     {
-        if (\Route::is('conversations.search') || request()->is('search') || request()->is('search/*')) {
+        if ($this->isSearchPage()) {
             return 0;
         }
 
@@ -52,8 +57,53 @@ class SortableCustomFieldsServiceProvider extends ServiceProvider
         return 0;
     }
 
+    /**
+     * On search, only show columns for custom fields that are active as filters
+     * (e.g. #Dringlichkeit), so the table stays aligned across mailboxes.
+     */
+    protected function getSearchFilterCustomFields()
+    {
+        $filters = request()->input('f', []);
+        if (!is_array($filters) || !count($filters)) {
+            return collect();
+        }
+
+        $search_fields = CustomField::getSearchCustomFields();
+        if (!$search_fields || !count($search_fields)) {
+            return collect();
+        }
+
+        $active = collect();
+        $seen_names = [];
+
+        foreach ($search_fields as $custom_field) {
+            // Search filter keys look like "#Dringlichkeit"
+            if (empty($filters[$custom_field->name])) {
+                continue;
+            }
+
+            $display = clone $custom_field;
+            $display_name = ltrim($custom_field->name, '#');
+            // Remove mailbox suffix when names collide: "Name {123}"
+            $display_name = preg_replace('/\s*\{\d+\}$/', '', $display_name);
+            $display->name = $display_name;
+
+            if (isset($seen_names[$display_name])) {
+                continue;
+            }
+            $seen_names[$display_name] = true;
+            $active->push($display);
+        }
+
+        return $active->values();
+    }
+
     protected function getListCustomFields()
     {
+        if ($this->isSearchPage()) {
+            return $this->getSearchFilterCustomFields();
+        }
+
         $mailbox_id = $this->getMailboxIdForList();
         if (!$mailbox_id) {
             return collect();
