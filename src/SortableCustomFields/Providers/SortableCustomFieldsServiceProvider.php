@@ -32,12 +32,44 @@ class SortableCustomFieldsServiceProvider extends ServiceProvider
     }
 
     /**
+     * Initial search page or AJAX pagination/sorting of search results.
+     * Sorting uses conversations.ajax and sends filters as filter[f], not f.
+     */
+    protected function isSearchContext()
+    {
+        if ($this->isSearchPage()) {
+            return true;
+        }
+
+        $filter = request()->input('filter');
+        return is_array($filter) && array_key_exists('q', $filter);
+    }
+
+    /**
+     * Search filters from the initial GET (?f[...]) or AJAX sorting/pagination (filter[f]).
+     */
+    protected function getRequestSearchFilters()
+    {
+        $filters = request()->input('f');
+        if (is_array($filters)) {
+            return $filters;
+        }
+
+        $nested = request()->input('filter.f');
+        if (is_array($nested)) {
+            return $nested;
+        }
+
+        return [];
+    }
+
+    /**
      * Custom field columns are only consistent in a single-mailbox list.
      * Search / multi-mailbox views mix fields and break the table layout (#1).
      */
     protected function getMailboxIdForList()
     {
-        if ($this->isSearchPage()) {
+        if ($this->isSearchContext()) {
             return 0;
         }
 
@@ -63,8 +95,8 @@ class SortableCustomFieldsServiceProvider extends ServiceProvider
      */
     protected function getSearchFilterCustomFields()
     {
-        $filters = request()->input('f', []);
-        if (!is_array($filters) || !count($filters)) {
+        $filters = $this->getRequestSearchFilters();
+        if (!count($filters)) {
             return collect();
         }
 
@@ -102,7 +134,7 @@ class SortableCustomFieldsServiceProvider extends ServiceProvider
 
     protected function getListCustomFields()
     {
-        if ($this->isSearchPage()) {
+        if ($this->isSearchContext()) {
             return $this->getSearchFilterCustomFields();
         }
 
@@ -121,6 +153,30 @@ class SortableCustomFieldsServiceProvider extends ServiceProvider
             ->values();
     }
 
+    protected function applyCustomFieldSorting($query_conversations)
+    {
+        if (empty($_REQUEST['sorting']['sort_by']) || strpos($_REQUEST['sorting']['sort_by'], 'custom_') !== 0) {
+            return $query_conversations;
+        }
+
+        $sortBy = str_replace('custom_', '', $_REQUEST['sorting']['sort_by']);
+        if (!preg_match('/^[A-Za-z0-9_]+$/', $sortBy)) {
+            return $query_conversations;
+        }
+
+        $order = ($_REQUEST['sorting']['order'] ?? 'asc') === 'desc' ? 'desc' : 'asc';
+
+        $query_conversations = $query_conversations->leftJoin(\DB::Raw('(select conversation_custom_field.custom_field_id, conversation_custom_field.conversation_id,conversation_custom_field.value,name from conversation_custom_field left join custom_fields on conversation_custom_field.custom_field_id = custom_fields.id where name LIKE \'' . $sortBy . '\') a'), 'a.conversation_id', '=', 'conversations.id');
+
+        // FIX for #2 "Sorting of Custom Fields not working with Customer Folders"
+        $query_conversations = $query_conversations->selectRaw('conversations.*, (CASE WHEN a.name LIKE \'' . $sortBy . '\' THEN a.value END) AS ' . $sortBy);
+        // old Implementation
+        // $query_conversations=  $query_conversations->selectRaw('*, (CASE WHEN a.name LIKE \''.$sortBy.'\' THEN a.value END) AS '. $sortBy);
+        $query_conversations = $query_conversations->orderBy($sortBy, $order);
+
+        return $query_conversations;
+    }
+
     public function hooks()
     {
         // Add module's JS file to the application layout.
@@ -134,20 +190,15 @@ class SortableCustomFieldsServiceProvider extends ServiceProvider
             return $styles;
         });
 
-        // Sort by custom fields
+        // Sort by custom fields (mailbox folders)
         \Eventy::addFilter('folder.conversations_query', function ($query_conversations) {
-            if (isset($_REQUEST['sorting']) && strpos($_REQUEST['sorting']['sort_by'], 'custom_') === 0) {
-                $sortBy = str_replace('custom_', '', $_REQUEST['sorting']['sort_by']);
-                $query_conversations = $query_conversations->leftJoin(\DB::Raw('(select conversation_custom_field.custom_field_id, conversation_custom_field.conversation_id,conversation_custom_field.value,name from conversation_custom_field left join custom_fields on conversation_custom_field.custom_field_id = custom_fields.id where name LIKE \'' . $sortBy . '\') a'), 'a.conversation_id', '=', 'conversations.id');
-
-                // FIX for #2 "Sorting of Custom Fields not working with Customer Folders"
-                $query_conversations = $query_conversations->selectRaw('conversations.*, (CASE WHEN a.name LIKE \'' . $sortBy . '\' THEN a.value END) AS ' . $sortBy);
-                // old Implementation
-                // $query_conversations=  $query_conversations->selectRaw('*, (CASE WHEN a.name LIKE \''.$sortBy.'\' THEN a.value END) AS '. $sortBy);
-                $query_conversations = $query_conversations->orderBy($sortBy, $_REQUEST['sorting']['order']);
-            }
-            return $query_conversations;
+            return $this->applyCustomFieldSorting($query_conversations);
         });
+
+        // Sort by custom fields (search + AJAX sort/pagination)
+        \Eventy::addFilter('search.conversations.apply_filters', function ($query_conversations, $filters, $q) {
+            return $this->applyCustomFieldSorting($query_conversations);
+        }, 20, 3);
 
         \Eventy::addAction('conversations_table.col_before_conv_number', function ($conversation) {
             $custom_fields = $this->getListCustomFields();
