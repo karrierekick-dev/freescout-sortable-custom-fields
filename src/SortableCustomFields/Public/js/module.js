@@ -19,4 +19,15 @@ $(document).ready(function() {
 			removeDateSort()
 			}
 	};
+
+	// FreeScout disables empty search filters after render, so the next submit
+	// drops them from the URL. Keep active filters enabled (empty value included).
+	function enableActiveSearchFilters() {
+		$('#search-filters .form-group.active :input').prop('disabled', false);
+	}
+
+	if ($('.section-search form').length) {
+		enableActiveSearchFilters();
+		$('.section-search form').on('submit', enableActiveSearchFilters);
+	}
 });

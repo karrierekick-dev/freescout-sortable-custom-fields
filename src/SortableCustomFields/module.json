@@ -2,7 +2,7 @@
     "name": "Sortable Custom Fields",
     "alias": "sortablecustomfields",
     "description": "Sortable columns for Custom Fields in the FreeScout conversation table",
-    "version": "1.1.1",
+    "version": "1.1.2",
     "detailsUrl": "https://github.com/karrierekick-dev/freescout-sortable-custom-fields",
     "author": "Edudzi; Karriere Kick",
     "authorUrl": "https://karriere-kick.de",

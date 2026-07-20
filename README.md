@@ -24,7 +24,7 @@ Release ZIPs: https://github.com/karrierekick-dev/freescout-sortable-custom-fiel
 # Usage
 Every Custom Field you create in the Custom Fields module becomes a column in your conversation tables and is sortable by its values.
 
-Custom field columns are shown in single-mailbox conversation lists. On the search page they stay hidden by default (mixed mailboxes would break the table layout), but any custom field used as an active search filter (e.g. `#Dringlichkeit`) is shown as a column.
+Custom field columns are shown in single-mailbox conversation lists. On the search page they stay hidden by default (mixed mailboxes would break the table layout), but any custom field used as an active search filter (e.g. `#Dringlichkeit`) is shown as a column — including when the filter value is empty/null.
 
 You may style your rows with CSS depending on the defined Custom Fields.
 

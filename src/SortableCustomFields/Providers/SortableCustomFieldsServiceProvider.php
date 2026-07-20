@@ -77,8 +77,10 @@ class SortableCustomFieldsServiceProvider extends ServiceProvider
         $seen_names = [];
 
         foreach ($search_fields as $custom_field) {
-            // Search filter keys look like "#Dringlichkeit"
-            if (empty($filters[$custom_field->name])) {
+            // Search filter keys look like "#Dringlichkeit".
+            // Keep the column even when the filter value is empty/null (""),
+            // as long as the filter itself is present in the request.
+            if (!array_key_exists($custom_field->name, $filters)) {
                 continue;
             }
 
