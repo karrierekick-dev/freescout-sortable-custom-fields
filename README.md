@@ -14,15 +14,24 @@ Go to the "src" directory of this repository and copy the folder "SortableCustom
 
 Go to the "Modules" section in FreeScout and activate "Sortable Custom Fields"
 
+# Updates
+From version 1.1.0 onwards FreeScout can update this module via the Modules page (`latestVersionUrl` / `latestVersionZipUrl` in `module.json`).
+
+If you still run 1.0.x, install 1.1.0 once manually (copy `SortableCustomFields` into `Modules/` or use the release ZIP). After that, in-app updates work.
+
+Release ZIPs: https://github.com/karrierekick-dev/freescout-sortable-custom-fields/releases
+
 # Usage
 Every Custom Field you create in the Custom Fields module becomes a column in your conversation tables and is sortable by its values.
 
+Custom field columns are shown only in single-mailbox conversation lists. They are hidden on the search page and other multi-mailbox views, where mixed mailboxes would break the table layout.
+
 You may style your rows with CSS depending on the defined Custom Fields.
 
-Each Custom Field will add a class to the tr element and it's corresponding td element in the table. 
-(It will be created using Laravels [Str::slug() class](https://laravel.com/docs/10.x/strings#method-str-slug))
+Each Custom Field will add a class to the tr element and its corresponding td element in the table.
+(It will be created using Laravel's [Str::slug() class](https://laravel.com/docs/10.x/strings#method-str-slug))
 
-Assuming you have a Custom Field "Priority" with the values 
+Assuming you have a Custom Field "Priority" with the values
 * "High"
 * "Medium"
 * "Low"
@@ -69,8 +78,6 @@ You may use the official FreeScout [Customization & Rebranding Module](https://f
     .conv-row.cf_priority_new-idea td {
         background-color: var(--bg-idea);
     }
-
-
 
 # Future Ideas
 * Define the position where a Custom Field column should be placed to.

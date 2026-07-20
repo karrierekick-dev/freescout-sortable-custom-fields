@@ -19,157 +19,173 @@ class SortableCustomFieldsServiceProvider extends ServiceProvider
         $this->registerConfig();
         $this->hooks();
     }
+
     public static function createSlug($str, $delimiter = '_')
     {
         $slug = \Str::slug($str, $delimiter, 'en');
         return $slug;
     }
+
+    /**
+     * Custom field columns are only consistent in a single-mailbox list.
+     * Search / multi-mailbox views mix fields and break the table layout (#1).
+     */
+    protected function getMailboxIdForList()
+    {
+        if (\Route::is('conversations.search') || request()->is('search') || request()->is('search/*')) {
+            return 0;
+        }
+
+        if (!empty(request()->mailbox_id)) {
+            return (int) request()->mailbox_id;
+        }
+
+        if (\Route::is('mailboxes.view') || \Route::is('mailboxes.view.folder')) {
+            return (int) request()->route('id');
+        }
+
+        $mailbox = \Helper::getGlobalEntity('mailbox');
+        if ($mailbox && !empty($mailbox->id)) {
+            return (int) $mailbox->id;
+        }
+
+        return 0;
+    }
+
+    protected function getListCustomFields()
+    {
+        $mailbox_id = $this->getMailboxIdForList();
+        if (!$mailbox_id) {
+            return collect();
+        }
+
+        return CustomField::where('mailbox_id', $mailbox_id)
+            // groupBy('name') does not work in PostgreSQL.
+            ->distinct('name')
+            ->get()
+            ->filter(function ($custom_field) {
+                return (bool) $custom_field->show_in_list;
+            })
+            ->values();
+    }
+
     public function hooks()
     {
-          // Add module's JS file to the application layout.
-          \Eventy::addFilter('javascripts', function ($javascripts) {
-     
+        // Add module's JS file to the application layout.
+        \Eventy::addFilter('javascripts', function ($javascripts) {
             $javascripts[] = \Module::getPublicPath(CF_SORTABLE_MODULE) . '/js/module.js';
-
             return $javascripts;
         });
 
-       
-        \Eventy::addFilter('stylesheets', function($styles) {
-            $styles[] = \Module::getPublicPath(CF_SORTABLE_MODULE).'/css/style.css';
+        \Eventy::addFilter('stylesheets', function ($styles) {
+            $styles[] = \Module::getPublicPath(CF_SORTABLE_MODULE) . '/css/style.css';
             return $styles;
         });
 
         // Sort by custom fields
         \Eventy::addFilter('folder.conversations_query', function ($query_conversations) {
-
-            if (isset($_REQUEST['sorting'])&& strpos($_REQUEST['sorting']['sort_by'], 'custom_') === 0) {
-                $sortBy = str_replace('custom_','',$_REQUEST['sorting']['sort_by']);
-                $query_conversations = $query_conversations->leftJoin(\DB::Raw('(select conversation_custom_field.custom_field_id, conversation_custom_field.conversation_id,conversation_custom_field.value,name from conversation_custom_field left join custom_fields on conversation_custom_field.custom_field_id = custom_fields.id where name LIKE \''.$sortBy.'\') a'),'a.conversation_id','=','conversations.id');
+            if (isset($_REQUEST['sorting']) && strpos($_REQUEST['sorting']['sort_by'], 'custom_') === 0) {
+                $sortBy = str_replace('custom_', '', $_REQUEST['sorting']['sort_by']);
+                $query_conversations = $query_conversations->leftJoin(\DB::Raw('(select conversation_custom_field.custom_field_id, conversation_custom_field.conversation_id,conversation_custom_field.value,name from conversation_custom_field left join custom_fields on conversation_custom_field.custom_field_id = custom_fields.id where name LIKE \'' . $sortBy . '\') a'), 'a.conversation_id', '=', 'conversations.id');
 
                 // FIX for #2 "Sorting of Custom Fields not working with Customer Folders"
-                $query_conversations=  $query_conversations->selectRaw('conversations.*, (CASE WHEN a.name LIKE \''.$sortBy.'\' THEN a.value END) AS '. $sortBy);
+                $query_conversations = $query_conversations->selectRaw('conversations.*, (CASE WHEN a.name LIKE \'' . $sortBy . '\' THEN a.value END) AS ' . $sortBy);
                 // old Implementation
                 // $query_conversations=  $query_conversations->selectRaw('*, (CASE WHEN a.name LIKE \''.$sortBy.'\' THEN a.value END) AS '. $sortBy);
-                $query_conversations=  $query_conversations->orderBy($sortBy,$_REQUEST['sorting']['order']);
+                $query_conversations = $query_conversations->orderBy($sortBy, $_REQUEST['sorting']['order']);
             }
             return $query_conversations;
-
-        }); 
-
+        });
 
         \Eventy::addAction('conversations_table.col_before_conv_number', function ($conversation) {
-
-            $mailbox_id = request()->mailbox_id ?? request()->id ?? 0;
-       
-        if ($mailbox_id) {
-            $custom_fields = CustomField::where('mailbox_id', $mailbox_id)
-                // groupBy('name') does not work in PostgreSQL.
-                ->distinct('name')
-                ->get();
-        }
-
-
-        if (isset($custom_fields) && count($custom_fields)) {
-            foreach ($custom_fields as $custom_field) {
-                if (!$custom_field->show_in_list){
-                    continue;
-                }
-                $slug= $this->createSlug($custom_field->name, "_");
-                ob_start()
-                    ?>
-                    <col class="conv-<?=  $slug ?>">
-               
-                <?php
-                $output = ob_get_clean();
-                echo $output;
+            $custom_fields = $this->getListCustomFields();
+            if (!$custom_fields->count()) {
+                return;
             }
-        }
-        }, 20, 3);
-        \Eventy::addAction('conversations_table.th_before_conv_number', function () {
-            $sorting=['sort_by'=>'date','order'=>'asc'];
 
-            if ( isset($_REQUEST['sorting'])){  
+            foreach ($custom_fields as $custom_field) {
+                $slug = $this->createSlug($custom_field->name, "_");
+                ob_start();
+                ?>
+                    <col class="conv-<?= $slug ?>">
+                <?php
+                echo ob_get_clean();
+            }
+        }, 20, 3);
+
+        \Eventy::addAction('conversations_table.th_before_conv_number', function () {
+            $custom_fields = $this->getListCustomFields();
+            if (!$custom_fields->count()) {
+                return;
+            }
+
+            $sorting = ['sort_by' => 'date', 'order' => 'asc'];
+            if (isset($_REQUEST['sorting'])) {
                 $sorting['sort_by'] = request()->sorting['sort_by'];
                 $sorting['order'] = request()->sorting['order'];
-              
-
-            }
-          
-            $mailbox_id = request()->mailbox_id ?? request()->id ?? 0;
-       
-            if ($mailbox_id) {
-                $custom_fields = CustomField::where('mailbox_id', $mailbox_id)
-                    // groupBy('name') does not work in PostgreSQL.
-                    ->distinct('name')
-                    ->get();
             }
 
-
-            if (isset($custom_fields) && count($custom_fields)) {
-                foreach ($custom_fields as $custom_field) {
-                    if (!$custom_field->show_in_list){
-                        continue;
-                    }
-                    $slug= $this->createSlug($custom_field->name, "_");
-                    ob_start()
-                        ?>
+            foreach ($custom_fields as $custom_field) {
+                $slug = $this->createSlug($custom_field->name, "_");
+                ob_start();
+                ?>
                     <th class="custom-field-th">
-                        <span class="conv-col-sort custom-field-tr" data-sort-by="custom_<?=  $slug ?>" data-order="<?=  ($sorting['sort_by'] ==  'custom_'.$slug) ? $sorting['order']:'desc' ?>">
-                            <?=  __($custom_field->name) ?>
-                            <?= ($sorting['sort_by'] == 'custom_'.$slug && $sorting['order'] =='asc')? '↓' : '' ?>
-                            <?= ($sorting['sort_by'] == 'custom_'.$slug && $sorting['order'] =='desc')? '↑' : ''?>
+                        <span class="conv-col-sort custom-field-tr" data-sort-by="custom_<?= $slug ?>" data-order="<?= ($sorting['sort_by'] == 'custom_' . $slug) ? $sorting['order'] : 'desc' ?>">
+                            <?= __($custom_field->name) ?>
+                            <?= ($sorting['sort_by'] == 'custom_' . $slug && $sorting['order'] == 'asc') ? '↓' : '' ?>
+                            <?= ($sorting['sort_by'] == 'custom_' . $slug && $sorting['order'] == 'desc') ? '↑' : '' ?>
                         </span>
                     </th>
-                    <?php
-                    $output = ob_get_clean();
-                    echo $output;
+                <?php
+                echo ob_get_clean();
+            }
+        }, 20, 3);
+
+        \Eventy::addAction('conversations_table.td_before_conv_number', function ($conversation) {
+            $custom_fields = $this->getListCustomFields();
+            if (!$custom_fields->count()) {
+                return;
+            }
+
+            $values_by_name = [];
+            if (isset($conversation->custom_fields)) {
+                foreach ($conversation->custom_fields as $custom_field) {
+                    $values_by_name[$custom_field->name] = $custom_field;
                 }
             }
 
-
-        }, 20, 3);
-
-     \Eventy::addAction('conversations_table.td_before_conv_number', function ($conversation) {
-         if (isset($conversation->custom_fields)){
-            foreach ($conversation->custom_fields as $custom_field){
-                ob_start()
+            // Keep the same columns as headers (empty cell when a field is missing)
+            foreach ($custom_fields as $list_field) {
+                $custom_field = $values_by_name[$list_field->name] ?? null;
+                ob_start();
                 ?>
-                
-                     <td class="custom-field-td <?= $this->createCSSClassForCustomField($custom_field) ?>">
+                     <td class="custom-field-td <?= $custom_field ? $this->createCSSClassForCustomField($custom_field) : '' ?>">
+                     <?php if ($custom_field): ?>
                      <a href="<?= $conversation->url() ?>" title="<?= __('View conversation') ?>"><?= $custom_field->getAsText() ?></a>
+                     <?php endif; ?>
                      </td>
                 <?php
-                $output = ob_get_clean();
-                echo $output;
+                echo ob_get_clean();
             }
-        }
-      
-
         }, 20, 3);
-     
-        \Eventy::addAction('conversations_table.row_class', function($conversation) {
-       
-            if (isset($conversation->custom_fields)){
-                
-                foreach ($conversation->custom_fields as $custom_field){
+
+        \Eventy::addAction('conversations_table.row_class', function ($conversation) {
+            if (isset($conversation->custom_fields)) {
+                foreach ($conversation->custom_fields as $custom_field) {
                     echo " ";
                     echo $this->createCSSClassForCustomField($custom_field);
                     echo " ";
                 }
             }
-          
         });
-    
     }
 
-    private function createCSSClassForCustomField($custom_field) {
+    private function createCSSClassForCustomField($custom_field)
+    {
         $propName = $this->createSlug($custom_field->name, "-");
         $propValue = $this->createSlug($custom_field->getAsText(), "-");
         return 'cf_' . $propName . '_' . $propValue;
     }
-
-  
 
     /**
      * Register config.
@@ -187,7 +203,6 @@ class SortableCustomFieldsServiceProvider extends ServiceProvider
         );
     }
 
-   
     /**
      * Get the services provided by the provider.
      *
